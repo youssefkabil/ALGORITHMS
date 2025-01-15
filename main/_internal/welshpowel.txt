@@ -1,0 +1,103 @@
+import tkinter as tk
+from tkinter import simpledialog, messagebox, Toplevel
+import ttkbootstrap as ttk
+import networkx as nx
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import random
+
+class GraphApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Graph Welsh-Powell")
+
+        # Create a ttkbootstrap style
+        self.style = ttk.Style("superhero")
+
+        # Create a frame for the widgets
+        self.frame = ttk.Frame(root, padding=20)
+        self.frame.pack(fill=tk.BOTH, expand=True)
+
+        # Title label
+        self.title_label = ttk.Label(self.frame, text="Welsh-Powell Graph Coloring", font=("Helvetica", 18))
+        self.title_label.pack(pady=10)
+
+        # Generate button
+        self.generate_button = ttk.Button(self.frame, text="Generate", command=self.open_graph_window)
+        self.generate_button.pack(pady=10)
+
+    def open_graph_window(self):
+        # Ask user for the number of nodes (sommets)
+        num_nodes = simpledialog.askinteger("Input", "How many sommets do you want?", minvalue=1)
+        if num_nodes is None:
+            return
+
+        # Generate a random graph with 50% probability of connection between nodes
+        graph = nx.erdos_renyi_graph(num_nodes, p=0.5)
+
+        # Create a new window
+        graph_window = Toplevel(self.root)
+        graph_window.title("Random Graph")
+
+        # Create a matplotlib figure
+        fig, ax = plt.subplots(figsize=(6, 4))
+        nx.draw(graph, with_labels=True, node_color="lightblue", edge_color="gray", node_size=500, font_size=10, ax=ax)
+        ax.set_title("Random Graph")
+
+        # Embed the matplotlib figure in the tkinter window
+        canvas = FigureCanvasTkAgg(fig, master=graph_window)
+        canvas_widget = canvas.get_tk_widget()
+        canvas_widget.pack(fill=tk.BOTH, expand=True)
+        canvas.draw()
+
+        # Add an Apply button
+        apply_button = ttk.Button(graph_window, text="Apply Welsh-Powell", command=lambda: self.apply_welsh_powell(graph, graph_window,num_nodes))
+        apply_button.pack(pady=10)
+
+    def apply_welsh_powell(self, graph, window,num_nodes):
+        # Apply Welsh-Powell algorithm
+        # Step a: Find the degree of each vertex
+        degrees = {node: degree for node, degree in graph.degree}
+
+        # Step b: Sort the vertices in order of descending degrees
+        sorted_nodes = sorted(degrees, key=degrees.get, reverse=True)
+
+        # Step c and d: Color the graph
+        color_map = {}
+        current_color = 0
+
+        for node in sorted_nodes:
+            if node not in color_map:
+                current_color += 1
+                color_map[node] = current_color
+                for neighbor in sorted_nodes:
+                    if neighbor not in color_map:
+                        # Check adjacency with all previously colored nodes of the same color
+                        can_color = all(not graph.has_edge(neighbor, other) for other in color_map if color_map[other] == current_color)
+                        if can_color:
+                            color_map[neighbor] = current_color
+
+        # Display the colored graph
+        fig, ax = plt.subplots(figsize=(6, 4))
+        colors = [color_map[node] for node in graph.nodes]
+        nx.draw(graph, with_labels=True, node_color=colors, edge_color="gray", node_size=500, font_size=10, cmap=plt.cm.rainbow, ax=ax)
+        ax.set_title("Graph Colored with Welsh-Powell")
+
+        # Replace the old canvas in the window
+        for widget in window.winfo_children():
+            if isinstance(widget, FigureCanvasTkAgg):
+                widget.get_tk_widget().destroy()
+
+        canvas = FigureCanvasTkAgg(fig, master=window)
+        canvas_widget = canvas.get_tk_widget()
+        canvas_widget.pack(fill=tk.BOTH, expand=True)
+        canvas.draw()
+
+        # Show the number of colors used in a messagebox
+        num_colors_used = max(color_map.values())
+        messagebox.showinfo("Success", f"{num_colors_used}<=X(G)<={num_nodes}")
+
+if __name__ == "__main__":
+    root = ttk.Window(themename="superhero")
+    app = GraphApp(root)
+    root.mainloop()

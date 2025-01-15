@@ -1,0 +1,106 @@
+import tkinter as tk
+from tkinter import simpledialog, messagebox, Toplevel
+import ttkbootstrap as ttk
+import networkx as nx
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import random
+
+class GraphApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Graph Ford-Fulkerson")
+
+        # Create a ttkbootstrap style
+        self.style = ttk.Style("superhero")
+
+        # Create a frame for the widgets
+        self.frame = ttk.Frame(root, padding=20)
+        self.frame.pack(fill=tk.BOTH, expand=True)
+
+        # Title label
+        self.title_label = ttk.Label(self.frame, text="Ford-Fulkerson Graph Visualization", font=("Helvetica", 18))
+        self.title_label.pack(pady=10)
+
+        # Generate button
+        self.generate_button = ttk.Button(self.frame, text="Generate", command=self.open_graph_window)
+        self.generate_button.pack(pady=10)
+
+    def open_graph_window(self):
+        # Ask user for the number of nodes (sommets)
+        num_nodes = simpledialog.askinteger("Input", "How many nodes do you want?", minvalue=1)
+        if num_nodes is None:
+            return
+
+        # Generate a random directed graph with 50% probability of connection between nodes and random capacities
+        graph = nx.DiGraph()
+        for i in range(num_nodes):
+            for j in range(num_nodes):
+                if i != j and random.random() < 0.5:  # 50% probability of connection
+                    capacity = random.randint(1, 20)  # Random capacity between 1 and 20
+                    graph.add_edge(i, j, capacity=capacity)
+
+        # Create a new window
+        graph_window = Toplevel(self.root)
+        graph_window.title("Random Graph")
+
+        # Create a matplotlib figure
+        fig, ax = plt.subplots(figsize=(6, 4))
+        pos = nx.spring_layout(graph)
+        capacities = nx.get_edge_attributes(graph, 'capacity')
+        nx.draw(graph, pos, with_labels=True, node_color="lightblue", edge_color="gray", node_size=500, font_size=10, ax=ax)
+        nx.draw_networkx_edge_labels(graph, pos, edge_labels=capacities)
+        ax.set_title("Random Graph with Capacities")
+
+        # Embed the matplotlib figure in the tkinter window
+        canvas = FigureCanvasTkAgg(fig, master=graph_window)
+        canvas_widget = canvas.get_tk_widget()
+        canvas_widget.pack(fill=tk.BOTH, expand=True)
+        canvas.draw()
+
+        # Add an Apply button
+        apply_button = ttk.Button(graph_window, text="Apply Ford-Fulkerson", command=lambda: self.apply_ford_fulkerson(graph, graph_window))
+        apply_button.pack(pady=10)
+
+    def apply_ford_fulkerson(self, graph, window):
+        # Ask user for source and sink nodes
+        source = simpledialog.askinteger("Input", "Enter the source node:")
+        sink = simpledialog.askinteger("Input", "Enter the sink node:")
+
+        if source is not None and sink is not None and source in graph.nodes and sink in graph.nodes:
+            # Apply Ford-Fulkerson algorithm
+            flow_value, flow_dict = nx.maximum_flow(graph, source, sink)
+
+            # Update the capacities with the flow values
+            for u in flow_dict:
+                for v in flow_dict[u]:
+                    if graph.has_edge(u, v):
+                        graph[u][v]['capacity'] -= flow_dict[u][v]
+
+            # Display the result
+            messagebox.showinfo("Ford-Fulkerson Result", f"Maximum flow: {flow_value}")
+
+            # Visualize the updated graph with new capacities
+            fig, ax = plt.subplots(figsize=(6, 4))
+            pos = nx.spring_layout(graph)
+            capacities = nx.get_edge_attributes(graph, 'capacity')
+            nx.draw(graph, pos, with_labels=True, node_color="lightblue", edge_color="gray", node_size=500, font_size=10, ax=ax)
+            nx.draw_networkx_edge_labels(graph, pos, edge_labels=capacities)
+            ax.set_title("Graph with Updated Capacities after Ford-Fulkerson")
+
+            # Replace the old canvas in the window
+            for widget in window.winfo_children():
+                if isinstance(widget, FigureCanvasTkAgg):
+                    widget.get_tk_widget().destroy()
+
+            canvas = FigureCanvasTkAgg(fig, master=window)
+            canvas_widget = canvas.get_tk_widget()
+            canvas_widget.pack(fill=tk.BOTH, expand=True)
+            canvas.draw()
+        else:
+            messagebox.showerror("Error", "Invalid source or sink node.")
+
+if __name__ == "__main__":
+    root = ttk.Window(themename="superhero")
+    app = GraphApp(root)
+    root.mainloop()

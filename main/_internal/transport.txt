@@ -1,0 +1,253 @@
+import tkinter as tk
+from tkinter import ttk
+import numpy as np
+import random
+
+class TransportationApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Transportation Problem")
+
+        # Create a frame for the table
+        self.table_frame = ttk.Frame(root, padding=20)
+        self.table_frame.pack(fill=tk.BOTH, expand=True)
+
+        # Generate the table with random values
+        self.generate_table()
+
+        # Create buttons
+        self.north_west_button = ttk.Button(root, text="North-West Corner Method", command=self.north_west_corner_method)
+        self.north_west_button.pack(side=tk.LEFT, padx=10, pady=10)
+
+        self.least_cost_button = ttk.Button(root, text="Least Cost Method", command=self.least_cost_method)
+        self.least_cost_button.pack(side=tk.LEFT, padx=10, pady=10)
+
+        self.stepping_stone_button = ttk.Button(root, text="Stepping Stone Method", command=self.stepping_stone_method)
+        self.stepping_stone_button.pack_forget()  # Initially hidden
+
+        self.optimal_solution_label = ttk.Label(root, text="", font=("Helvetica", 12))
+        self.optimal_solution_label.pack(pady=10)
+
+    def generate_table(self):
+        # Randomly generate the supply, demand, and cost matrix
+        self.supply = [random.randint(20, 50) for _ in range(3)]
+        self.demand = [random.randint(20, 50) for _ in range(3)]
+
+        # Balance supply and demand
+        total_supply = sum(self.supply)
+        total_demand = sum(self.demand)
+        if total_supply > total_demand:
+            self.demand.append(total_supply - total_demand)
+            self.cost_matrix = np.random.randint(1, 10, size=(3, len(self.demand)))
+        elif total_supply < total_demand:
+            self.supply.append(total_demand - total_supply)
+            self.cost_matrix = np.random.randint(1, 10, size=(len(self.supply), 3))
+        else:
+            self.cost_matrix = np.random.randint(1, 10, size=(3, 3))
+
+        # Populate the table for display
+        self.display_table(self.cost_matrix, self.supply, self.demand)
+
+    def display_table(self, data, supply, demand):
+        for widget in self.table_frame.winfo_children():
+            widget.destroy()
+
+        # Add headers
+        headers = ["Usine\\Magasin"] + [f"Magasin {i + 1}" for i in range(len(demand))] + ["Capacité"]
+        for col_num, header in enumerate(headers):
+            header_label = ttk.Label(self.table_frame, text=header, font=("Helvetica", 12), borderwidth=2, relief="groove")
+            header_label.grid(row=0, column=col_num, sticky="nsew")
+
+        # Add rows
+        for i, row in enumerate(data):
+            row_label = ttk.Label(self.table_frame, text=f"Usine {i + 1}", font=("Helvetica", 12), borderwidth=2, relief="groove")
+            row_label.grid(row=i + 1, column=0, sticky="nsew")
+
+            for j, value in enumerate(row):
+                cell_label = ttk.Label(self.table_frame, text=value, font=("Helvetica", 12), borderwidth=2, relief="groove")
+                cell_label.grid(row=i + 1, column=j + 1, sticky="nsew")
+
+            supply_label = ttk.Label(self.table_frame, text=supply[i], font=("Helvetica", 12), borderwidth=2, relief="groove")
+            supply_label.grid(row=i + 1, column=len(row) + 1, sticky="nsew")
+
+        # Add demand row
+        demand_label = ttk.Label(self.table_frame, text="Demande", font=("Helvetica", 12), borderwidth=2, relief="groove")
+        demand_label.grid(row=len(data) + 1, column=0, sticky="nsew")
+
+        for j, demand_value in enumerate(demand):
+            demand_cell = ttk.Label(self.table_frame, text=demand_value, font=("Helvetica", 12), borderwidth=2, relief="groove")
+            demand_cell.grid(row=len(data) + 1, column=j + 1, sticky="nsew")
+    
+    def north_west_corner_method(self):
+        allocation = np.zeros_like(self.cost_matrix)
+        supply = self.supply[:]
+        demand = self.demand[:]
+    
+        i, j = 0, 0
+        while i < len(supply) and j < len(demand):
+            allocated = min(supply[i], demand[j])
+            allocation[i][j] = allocated
+            supply[i] -= allocated
+            demand[j] -= allocated
+    
+            if supply[i] == 0:
+                i += 1
+            elif demand[j] == 0:
+                j += 1
+    
+        total_cost = np.sum(allocation * self.cost_matrix)
+        self.north_west_total = total_cost  # Save total cost
+        self.north_west_allocation = allocation  # Save allocation
+        self.display_table(allocation, self.supply, self.demand)
+        self.optimal_solution_label.config(text=f"North-West Corner Method Applied\nTotal Cost: {total_cost}")
+        self.stepping_stone_button.pack(side=tk.LEFT, padx=10, pady=10)
+    
+    def least_cost_method(self):
+        allocation = np.zeros_like(self.cost_matrix)
+        supply = self.supply[:]
+        demand = self.demand[:]
+        costs = self.cost_matrix.astype(float).copy()
+    
+        while np.any(supply) and np.any(demand):
+            i, j = divmod(costs.argmin(), costs.shape[1])
+            allocated = min(supply[i], demand[j])
+            allocation[i][j] = allocated
+            supply[i] -= allocated
+            demand[j] -= allocated
+    
+            if supply[i] == 0:
+                costs[i, :] = np.inf
+            if demand[j] == 0:
+                costs[:, j] = np.inf
+    
+        total_cost = np.sum(allocation * self.cost_matrix)
+        self.least_cost_total = total_cost  # Save total cost
+        self.least_cost_allocation = allocation  # Save allocation
+        self.display_table(allocation, self.supply, self.demand)
+        self.optimal_solution_label.config(text=f"Least Cost Method Applied\nTotal Cost: {total_cost}")
+        self.stepping_stone_button.pack(side=tk.LEFT, padx=10, pady=10)
+
+
+    def stepping_stone_method(self):
+        """
+        Apply the Stepping Stone method to optimize the transportation problem.
+        """
+        if hasattr(self, 'north_west_total') and hasattr(self, 'least_cost_total'):
+            if self.north_west_total < self.least_cost_total:
+                allocation = self.north_west_allocation.copy()
+                current_cost = self.north_west_total
+            else:
+                allocation = self.least_cost_allocation.copy()
+                current_cost = self.least_cost_total
+        else:
+            self.optimal_solution_label.config(text="Apply North-West or Least Cost method first!")
+            return
+    
+        costs = self.cost_matrix
+    
+        def find_unused_cells(allocation):
+            """Find all unused cells in the allocation matrix."""
+            unused_cells = []
+            for i in range(len(allocation)):
+                for j in range(len(allocation[0])):
+                    if allocation[i][j] == 0:
+                        unused_cells.append((i, j))
+            return unused_cells
+    
+        def find_closed_loop(allocation, start_i, start_j):
+            """
+            Find a closed loop starting from a specific cell (start_i, start_j).
+            This requires a depth-first search (DFS) to explore valid paths.
+            """
+            def dfs(path, visited, current_cell):
+                x, y = current_cell
+                if len(path) >= 4 and current_cell == path[0]:
+                    return path
+                for dx, dy in [(0, 1), (1, 0), (0, -1), (-1, 0)]:  # Right, Down, Left, Up
+                    nx, ny = x + dx, y + dy
+                    if 0 <= nx < allocation.shape[0] and 0 <= ny < allocation.shape[1]:
+                        if (nx, ny) in visited and len(path) > 2 and path[0] == (nx, ny):
+                            return path + [(nx, ny)]
+                        if allocation[nx, ny] > 0 or (nx == start_i and ny == start_j):
+                            if (nx, ny) not in visited:
+                                visited.add((nx, ny))
+                                result = dfs(path + [(nx, ny)], visited, (nx, ny))
+                                if result:
+                                    return result
+                                visited.remove((nx, ny))
+                return None
+    
+            return dfs([(start_i, start_j)], {(start_i, start_j)}, (start_i, start_j))
+    
+        def calculate_improvement_index(unused_cell, allocation, costs):
+            """Calculate the improvement index for a given unused cell."""
+            i, j = unused_cell
+    
+            # Create a closed loop
+            loop = find_closed_loop(allocation, i, j)
+            if not loop:
+                return float('inf')  # No valid loop, infinite cost.
+    
+            # Calculate the cost change along the loop
+            cost_change = 0
+            sign = 1  # Start with addition
+            for cell in loop:
+                x, y = cell
+                cost_change += sign * costs[x][y]
+                sign *= -1  # Alternate between adding and subtracting
+    
+            return cost_change
+    
+        def adjust_allocation(allocation, best_cell):
+            """
+            Adjust allocations along the best loop found.
+            Alternate + and - adjustments starting with - for the best_cell.
+            """
+            loop = find_closed_loop(allocation, best_cell[0], best_cell[1])
+            if not loop:
+                return allocation  # No loop found, return unchanged allocation.
+    
+            min_allocation = float('inf')
+            for idx, cell in enumerate(loop):
+                if idx % 2 == 1:  # Consider only cells where allocation is subtracted.
+                    x, y = cell
+                    min_allocation = min(min_allocation, allocation[x][y])
+    
+            for idx, cell in enumerate(loop):
+                x, y = cell
+                if idx % 2 == 0:  # Add allocation.
+                    allocation[x][y] += min_allocation
+                else:  # Subtract allocation.
+                    allocation[x][y] -= min_allocation
+    
+            return allocation
+    
+        unused_cells = find_unused_cells(allocation)
+        improvement_indices = {
+            cell: calculate_improvement_index(cell, allocation, costs) for cell in unused_cells
+        }
+    
+        # Find the best improvement index
+        best_cell = min(improvement_indices, key=improvement_indices.get)
+        best_improvement = improvement_indices[best_cell]
+    
+        if best_improvement >= 0:
+            self.optimal_solution_label.config(text="Stepping Stone: No further improvement possible.")
+            return
+    
+        # Adjust allocations along the best loop
+        allocation = adjust_allocation(allocation, best_cell)
+    
+        total_cost = np.sum(allocation * costs)
+        self.display_table(allocation, self.supply, self.demand)
+        self.optimal_solution_label.config(
+            text=f"Stepping Stone Method Applied\nOptimized Total Cost: {total_cost}"
+        )
+    
+    
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = TransportationApp(root)
+    root.mainloop()
+ 
